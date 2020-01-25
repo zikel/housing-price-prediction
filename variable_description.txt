@@ -1,0 +1,66 @@
+PRICE: response
+BATHRM: # bathrooms
+HF_BATHRM: # half bathrooms
+HEAT: heating
+AC: air conditioning
+ROOMS: # rooms
+BEDRM: # bedrooms
+AYB: The earliest time the main portion of the building was built
+EYB: The year an improvement was built more recent than actual year built
+STORIES: # stories in primary dwelling
+SALEDATE: Date of most recent sale
+GBA: Gross building area in square feet
+STYLE
+GRADE
+CNDTN: Condition
+EXTWALL: Extrerior wall
+ROOF: Roof type
+INTWALL: Interior wall
+KITCHENS: # kitchens
+FIREPLACES: # fireplaces
+LANDAREA: Land area of property in square feet
+ZIPCODE
+LATITUDE
+LONGITUDE      
+ASSESSMENT_NBHD: Neighborhood ID
+WARD: Ward (District is divided into eight wards, each with approximately 75,000 residents)
+
+
+
+1. ~log(PRICE) + X
+
+BATHRM
+HF_BATHRM
+ROOMS
+BEDRM
+EYB
+SALEYEAR
+log(GBA)
+GRADE
+
+*CNDTN
+*FIREPLACES
+
+LANDAREA
+ASSESSMENT_NBHD
+WARD
+
+PRICE ~ ROOMS 0.3493 255126.7
+PRICE ~ BEDRM 0.3266 255423.3
+log(PRICE) ~ ROOMS 0.2906 17438.41
+log(PRICE) ~ BEDRM 0.3008 17312.8
+
+0.1938
+0.1925386
+0.1924255
+
+BATHRM:SALEYEAR
+HF_BATHRM:SALEYEAR
+
+Mfull005 <- lm(I(log(PRICE)) ~ BATHRM + HF_BATHRM + ROOMS + EYB + SALEYEAR 
+               + log(GBA) + GRADE + LANDAREA + ASSESSMENT_NBHD + CNDTN + FIREPLACES 
+               + BATHRM:SALEYEAR + HF_BATHRM:SALEYEAR, data = train_data)
+summary(Mfull005)
+AIC(Mfull005)
+
+

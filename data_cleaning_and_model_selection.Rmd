@@ -1,0 +1,190 @@
+---
+title: "STAT 444 a1 - 20530029"
+author: "Zike Lin, Kaggle score: 0.19580"
+date: "19/01/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data input and data preprocessing
+
+We first read in both the training data and the testing data:
+
+```{r echo=TRUE}
+# read in training data
+train_data <- read.csv("house_train.csv", header=TRUE)
+# read in testing data
+test_data <- read.csv("house_test.csv", header=TRUE)
+```
+
+Since some levels of factor in the testing data are absent in the training data, which makes predictions on data points with such levels infeasible, we modify such levels to an existing level of the training data:
+
+```{r echo=TRUE}
+# modify levels only appeared in testing data to one also appeared in the training data
+  for (i in seq_len(nrow(test_data))) {
+    if (test_data$INTWALL[i] == "Terrazo") test_data$INTWALL[i] <- "Default"
+  }
+  
+  for (i in seq_len(nrow(test_data))) {
+    if (test_data$STYLE[i] == "3.5 Story Fin") test_data$STYLE[i] <- "3 Story"
+  }
+```
+
+Also, we replaced SALEDATE with SALEYEAR, the year of sale, to only look at the year sale took place. But at this moment, I think including SALEMONTH and SALEYEARP:SALEMONTH for further model selection may have improved the final model.
+
+```{r echo=TRUE}
+  # extract year of sale from SALEDATE
+  for (i in seq_len(nrow(train_data))) {
+    train_data$SALEYEAR[i] <- as.numeric(substr(train_data$SALEDATE[i],1,4))
+  }
+  
+  for (i in seq_len(nrow(test_data))) {
+    test_data$SALEYEAR[i] <- as.numeric(substr(test_data$SALEDATE[i],1,4))
+  }
+```
+
+## Explore the full main effect model
+
+Note that (latitude, longtitude) interacts with all of Zipcode, Neighborhood ID and Ward as they all describe the geographic location of house individually. Also, if we were going to use (latitude, longtitude) to characterize impact of location, complex preprocessing is required (e.g. identify the center of the city and calculate Eucliean distance between each house and the center). For the above reason, we remove (latitude, longtitude) from the data.
+
+Now we take a look at the main effect model:
+
+```{r echo=TRUE}
+Mfull006 <- lm(I(log(PRICE)) ~ BATHRM + HF_BATHRM + HEAT + AC + ROOMS + BEDRM + AYB + EYB 
+               + STORIES + SALEYEAR + log(GBA) + STYLE + GRADE + CNDTN + EXTWALL + ROOF 
+               + INTWALL + LANDAREA + ASSESSMENT_NBHD + KITCHENS + FIREPLACES + ZIPCODE 
+               + WARD, data = train_data)
+summary(Mfull006)
+AIC(Mfull006)
+```
+
+HEAT seems to be not statistically significant, we do an individual check on log(PIRCE) and HEAT only:
+
+```{r echo=TRUE}
+m <- lm(log(PRICE) ~ HEAT, data = train_data)
+summary(m)
+```
+
+Both p-value and R^2 suggest HEAT is not siginificant, hence we exclude HEAT from the model.
+
+Similarly for other seemingly insigificant factors, such as STORIES, STYLE, EXTWALL, INTWALL, ROOF, KITCHENS, each we do an individual check:
+
+```{r echo=TRUE}
+m <- lm(log(PRICE) ~ STORIES, data = train_data)
+summary(m)
+```
+
+```{r echo=TRUE}
+m <- lm(log(PRICE) ~ STYLE, data = train_data)
+summary(m)
+```
+
+```{r echo=TRUE}
+m <- lm(log(PRICE) ~ EXTWALL, data = train_data)
+summary(m)
+```
+
+```{r echo=TRUE}
+m <- lm(log(PRICE) ~ INTWALL, data = train_data)
+summary(m)
+```
+
+```{r echo=TRUE}
+m <- lm(log(PRICE) ~ ROOF, data = train_data)
+summary(m)
+```
+
+```{r echo=TRUE}
+m <- lm(log(PRICE) ~ KITCHENS, data = train_data)
+summary(m)
+```
+
+Due to low R^2 value (< 0.1), we remove STORIES, STYLE, EXTWALL, INTWALL, ROOF, KITCHENS from the model.
+
+Also, to reduce the number of possible interaction terms in further model selection steps, we remove AYB and AC from the data for their relatively low values of R^2.
+
+Now we have narrowed the factors under consideration to BATHRM, HF_BATHRM, ROOMS, EYB, SALEYEAR, GBA, GRADE, LANDAREA, ASSESSMENT_NBHD, CNDTN, FIREPLACES.
+
+
+## To represent location
+
+There are three factors now representing the location of house: ZIPCODE, ASSESSMENT_NBHD and WARD. They are mutually related somehow and expose the model to colinearity if more than one of them are present in the model, we hence want to pick the best representationo of location out of them and throw away the other two.
+
+```{r echo=TRUE}
+m <- lm(log(PRICE) ~ ZIPCODE, data = train_data)
+summary(m)
+AIC(m)
+```
+
+```{r echo=TRUE}
+m <- lm(log(PRICE) ~ ASSESSMENT_NBHD, data = train_data)
+summary(m)
+AIC(m)
+```
+
+```{r echo=TRUE}
+m <- lm(log(PRICE) ~ WARD, data = train_data)
+summary(m)
+AIC(m)
+```
+
+ASSESSMENT_NBHD is selected as it gives the best R^2.
+
+
+## log(GBA)
+
+The model, PRICE ~ GBA, seems to fit better than log(PRICE) ~ GBA according to the following outputs, hence we proceed with log(GBA) rather than GBA
+```{r echo=TRUE}
+m <- lm(PRICE ~ GBA, data = train_data)
+summary(m)
+```
+
+```{r echo=TRUE}
+m <- lm(log(PRICE) ~ GBA, data = train_data)
+summary(m)
+```
+
+## Backward selection
+
+Define the intercept-only model:
+```{r echo=TRUE}
+M0 <- lm(I(log(PRICE)) ~ 1, data = train_data)
+```
+
+Define the full model with interaction terms:
+```{r echo=T,eval=F}
+Mfull004 <- lm(I(log(PRICE)) ~ (BATHRM + HF_BATHRM + ROOMS + EYB + SALEYEAR 
+               + log(GBA) + GRADE + LANDAREA + ASSESSMENT_NBHD 
+               + CNDTN + FIREPLACES)^2, data = train_data)
+summary(Mfull004)
+```
+
+(Long output of Mfull004 omitted)
+
+Conduct backward selection:
+```{r echo=TRUE,eval=F}
+system.time({Mstep04 <- step(object = Mfull004, scope = list(lower = M0, upper = Mfull004), 
+                             direction = "backward", trace = FALSE)})
+summary(Mstep04)
+```
+
+(Long output of Mstep04 omitted)
+
+## Final model
+To reduce the size of this model, we pick the interation terms that are most siginificant among the all, i.e. BATHRM:SALEYEAR and HF_BATHRM:SALEYEAR. 
+
+```{r echo=TRUE}
+fit <- lm(I(log(PRICE)) ~ BATHRM + HF_BATHRM + ROOMS + EYB + SALEYEAR 
+            + log(GBA) + GRADE + LANDAREA + ASSESSMENT_NBHD + CNDTN + FIREPLACES 
+            + BATHRM:SALEYEAR + HF_BATHRM:SALEYEAR, data = train_data)
+summary(fit)
+AIC(fit)
+```
+
+This concludes the final model: 
+
+log(PRICE)) ~ BATHRM + HF_BATHRM + ROOMS + EYB + SALEYEAR + log(GBA) + GRADE + LANDAREA + ASSESSMENT_NBHD + CNDTN + FIREPLACES + BATHRM:SALEYEAR + HF_BATHRM:SALEYEAR
+
